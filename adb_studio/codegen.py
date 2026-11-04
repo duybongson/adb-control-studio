@@ -45,7 +45,7 @@ def gen_python_adb(sc: Scenario, serial: str = "") -> str:
              "def screenshot(p): shell(f'screencap -p /sdcard/s.png'); run('pull', '/sdcard/s.png', p)",
              "def ui_xml(): shell('uiautomator dump /sdcard/u.xml'); return shell('cat /sdcard/u.xml')",
              "def assert_text_visible(t): assert t in ui_xml(), f'Text not found: {t}'",
-             "def assert_package_focused(p): assert p in shell('dumpsys window windows | grep mCurrentFocus'), f'{p} not focused'",
+             "def assert_package_focused(p): assert p in (shell('dumpsys window | grep mCurrentFocus') + shell('dumpsys activity activities | grep ResumedActivity')), f'{p} not focused'",
              "def assert_no_crash(): assert 'FATAL EXCEPTION' not in shell('logcat -d -t 200')", "",
              "def main():"]
     lines += [_py_adb_step(s) for s in sc.steps] or ["    pass"]

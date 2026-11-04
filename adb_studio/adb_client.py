@@ -132,8 +132,14 @@ class AdbClient:
         return self.shell("dumpsys battery | grep -E 'level|status|temperature'", check=False)
 
     def current_focus(self) -> str:
-        out = self.shell("dumpsys window windows | grep -E 'mCurrentFocus|mFocusedApp'", check=False)
-        return out.strip()
+        # 'dumpsys window windows' omits mCurrentFocus on some builds (seen on
+        # LDPlayer/Android 12): the full 'dumpsys window' dump has it, and
+        # 'dumpsys activity activities' is a reliable fallback.
+        parts = [
+            self.shell("dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'", check=False),
+            self.shell("dumpsys activity activities | grep -E 'topResumedActivity|ResumedActivity|mFocusedApp'", check=False),
+        ]
+        return "\n".join(p.strip() for p in parts if p and p.strip())
 
     # -- control ----------------------------------------------------------
     def tap(self, x: int, y: int): self.shell(f"input tap {int(x)} {int(y)}")
