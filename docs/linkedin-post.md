@@ -7,7 +7,7 @@ As a QA Manager, my daily Android workflow used to look like this:
 → Write all the boilerplate code by hand
 → Build the test report in yet another tool
 
-So I built the tool I always wished existed: **ADB Control Studio** — an open-source desktop app that controls Android devices over ADB, Appium-style, but with zero server setup.
+So I built the tool I always wished existed: ADB Control Studio — an open-source desktop app that controls Android devices over ADB, Appium-style, but with zero server setup.
 
 Why it beats Appium for day-to-day QA work:
 
