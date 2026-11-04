@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv/
+output/shots/
+output/reports/
+output/logs/
+output/videos/
+!output/.gitkeep
+*.log

@@ -1,0 +1,5 @@
+# Core app uses ONLY the Python standard library (tkinter + subprocess).
+# Pillow is optional: it only makes the live-screen mirror scale more smoothly.
+Pillow>=10.0
+# Dev / tests only:
+# pytest>=8.0
