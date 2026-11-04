@@ -170,6 +170,20 @@ class AdbClient:
         return self.run(args, timeout=180)
     def uninstall(self, package: str) -> str: return self.run(["uninstall", package], timeout=120)
     def launch_app(self, package: str) -> str:
+        # Resolve the launcher activity and `am start` it. `monkey` is NOT
+        # present on every build (missing on this LDPlayer image), so it is
+        # only the fallback.
+        out = self.shell(
+            "cmd package resolve-activity --brief -a android.intent.action.MAIN "
+            f"-c android.intent.category.LAUNCHER {package}", check=False)
+        component = ""
+        for line in out.splitlines():
+            line = line.strip()
+            if "/" in line and line.startswith(package):
+                component = line
+                break
+        if component:
+            return self.shell(f"am start -n {component}", check=False)
         return self.shell(f"monkey -p {package} -c android.intent.category.LAUNCHER 1", check=False)
     def stop_app(self, package: str): self.shell(f"am force-stop {package}", check=False)
     def clear_app(self, package: str): self.shell(f"pm clear {package}", check=False)

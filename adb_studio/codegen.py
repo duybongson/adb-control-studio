@@ -20,7 +20,7 @@ def _py_adb_step(s: Step) -> str:
     if t == "long_press": return f"    swipe({s.x}, {s.y}, {s.x}, {s.y}, {s.duration_ms})  # long press"
     if t == "key": return f"    keyevent('{s.key}')"
     if t == "text": return f"    type_text({s.text!r})"
-    if t == "launch_app": return f"    shell('monkey -p {s.package} -c android.intent.category.LAUNCHER 1')"
+    if t == "launch_app": return f"    shell('am start -n ' + shell('cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER {s.package}').strip().splitlines()[-1])"
     if t == "stop_app": return f"    shell('am force-stop {s.package}')"
     if t == "clear_app": return f"    shell('pm clear {s.package}')"
     if t == "shell": return f"    shell({s.command!r})"
@@ -93,7 +93,7 @@ def gen_shell(sc: Scenario) -> str:
         elif t == "swipe": lines.append(f"adb shell input swipe {s.x} {s.y} {s.x2} {s.y2} {s.duration_ms}")
         elif t == "key": lines.append(f"adb shell input keyevent {s.key}")
         elif t == "text": lines.append(f"adb shell input text \"{s.text.replace(' ', '%s')}\"")
-        elif t == "launch_app": lines.append(f"adb shell monkey -p {s.package} -c android.intent.category.LAUNCHER 1")
+        elif t == "launch_app": lines.append(f"adb shell \"am start -n \\$(cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER {s.package} | tail -n 1)\"")
         elif t == "stop_app": lines.append(f"adb shell am force-stop {s.package}")
         elif t == "wait": lines.append(f"sleep {s.seconds}")
         elif t == "shell": lines.append(f"adb shell {s.command}")
