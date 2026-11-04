@@ -28,10 +28,23 @@ except ImportError:  # pragma: no cover
 
 from .adb_client import KEYEVENTS, AdbClient, AdbError
 from .codegen import GENERATORS
+from .guide import ABOUT_TEXT, GUIDE_SECTIONS
 from .recorder import Scenario, Step
 from .report import write_report
 from .runner import Runner
 from .ui_dump import parse_ui_xml
+
+# -- professional dark-sidebar palette -------------------------------------
+COLORS = {
+    "sidebar_bg": "#0f172a", "sidebar_fg": "#e2e8f0", "sidebar_muted": "#94a3b8",
+    "accent": "#2563eb", "accent_hover": "#1d4ed8", "danger": "#dc2626",
+    "bg": "#f1f5f9", "panel": "#ffffff", "text": "#0f172a",
+    "status_bg": "#1e293b", "status_fg": "#bfdbfe",
+}
+FONT = ("Segoe UI", 10)
+FONT_SMALL = ("Segoe UI", 9)
+FONT_TITLE = ("Segoe UI", 15, "bold")
+FONT_SECTION = ("Segoe UI", 10, "bold")
 
 OUTPUT_DIR = os.path.join(os.getcwd(), "output")
 os.makedirs(os.path.join(OUTPUT_DIR, "shots"), exist_ok=True)
@@ -43,9 +56,13 @@ os.makedirs(os.path.join(OUTPUT_DIR, "videos"), exist_ok=True)
 class StudioApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("ADB Control Studio 1.0 - Appium-style control, without Appium")
-        self.geometry("1380x860")
-        self.minsize(1100, 700)
+        self.title("ADB Control Studio 1.1 - Appium-style control, without Appium")
+        self.geometry("1420x880")
+        self.minsize(1150, 720)
+        self.configure(bg=COLORS["bg"])
+        self._apply_theme()
+        self._build_menu()
+        self._bind_shortcuts()
         self.adb = AdbClient()
         self.scenario = Scenario(name="New scenario")
         self.recording = False
@@ -62,49 +79,161 @@ class StudioApp(tk.Tk):
         self._poll_log_queue()
         self.after(300, self.refresh_mirror)
 
+    # ------------------------------------------------------------ theming --
+    def _apply_theme(self):
+        style = ttk.Style(self)
+        try:
+            style.theme_use("clam")  # flat, modern base that accepts custom colors
+        except tk.TclError:
+            pass
+        c = COLORS
+        style.configure(".", font=FONT, background=c["bg"], foreground=c["text"])
+        style.configure("TFrame", background=c["bg"])
+        style.configure("Panel.TFrame", background=c["panel"])
+        style.configure("TLabel", background=c["bg"])
+        style.configure("Panel.TLabel", background=c["panel"])
+        style.configure("Title.TLabel", font=FONT_TITLE, background=c["bg"], foreground=c["text"])
+        style.configure("Sub.TLabel", font=FONT_SMALL, background=c["bg"], foreground="#475569")
+        style.configure("Section.TLabel", font=FONT_SECTION, background=c["bg"])
+        # sidebar (dark)
+        style.configure("Side.TFrame", background=c["sidebar_bg"])
+        style.configure("Side.TLabel", background=c["sidebar_bg"], foreground=c["sidebar_fg"], font=FONT_SMALL)
+        style.configure("SideTitle.TLabel", background=c["sidebar_bg"], foreground="#ffffff",
+                        font=("Segoe UI", 13, "bold"))
+        style.configure("SideMuted.TLabel", background=c["sidebar_bg"], foreground=c["sidebar_muted"], font=("Segoe UI", 8))
+        style.configure("SideSection.TLabel", background=c["sidebar_bg"], foreground="#7dd3fc", font=("Segoe UI", 9, "bold"))
+        style.configure("Side.TCheckbutton", background=c["sidebar_bg"], foreground=c["sidebar_fg"], font=FONT_SMALL)
+        style.map("Side.TCheckbutton", background=[("active", c["sidebar_bg"])])
+        style.configure("Side.TLabelframe", background=c["sidebar_bg"], foreground=c["sidebar_fg"])
+        style.configure("Side.TLabelframe.Label", background=c["sidebar_bg"], foreground="#7dd3fc", font=("Segoe UI", 9, "bold"))
+        # buttons
+        style.configure("TButton", padding=(10, 5), font=FONT_SMALL)
+        style.configure("Accent.TButton", background=c["accent"], foreground="#ffffff",
+                        padding=(12, 6), font=("Segoe UI", 9, "bold"))
+        style.map("Accent.TButton", background=[("active", c["accent_hover"]), ("disabled", "#93c5fd")])
+        style.configure("Danger.TButton", background=c["danger"], foreground="#ffffff",
+                        padding=(12, 6), font=("Segoe UI", 9, "bold"))
+        style.map("Danger.TButton", background=[("active", "#b91c1c")])
+        style.configure("Side.TButton", padding=(8, 4), font=FONT_SMALL)
+        # notebook tabs
+        style.configure("TNotebook", background=c["bg"], borderwidth=0)
+        style.configure("TNotebook.Tab", padding=(14, 7), font=("Segoe UI", 9, "bold"),
+                        background="#e2e8f0", foreground="#334155")
+        style.map("TNotebook.Tab", background=[("selected", c["panel"])], foreground=[("selected", c["accent"])])
+        # inputs & trees
+        style.configure("TEntry", padding=4)
+        style.configure("TCombobox", padding=4)
+        style.configure("Treeview", rowheight=24, font=FONT_SMALL, background=c["panel"], fieldbackground=c["panel"])
+        style.configure("Treeview.Heading", font=("Segoe UI", 9, "bold"), background="#e2e8f0")
+        style.configure("TLabelframe", background=c["bg"])
+        style.configure("TLabelframe.Label", font=("Segoe UI", 9, "bold"), foreground=c["accent"], background=c["bg"])
+        style.configure("TCheckbutton", background=c["bg"], font=FONT_SMALL)
+        style.map("TCheckbutton", background=[("active", c["bg"])])
+
+    def _build_menu(self):
+        menubar = tk.Menu(self)
+        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="Load scenario JSON...", command=self.load_scenario)
+        file_menu.add_command(label="Save scenario JSON...", command=self.save_scenario)
+        file_menu.add_separator()
+        file_menu.add_command(label="Take screenshot", command=self.take_screenshot)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.on_close)
+        menubar.add_cascade(label="File", menu=file_menu)
+        tools_menu = tk.Menu(menubar, tearoff=0)
+        tools_menu.add_command(label="Refresh devices (F5)", command=self.refresh_devices)
+        tools_menu.add_command(label="Refresh screen (F6)", command=self.refresh_mirror)
+        tools_menu.add_command(label="Dump UI (Inspector)", command=self.dump_ui)
+        tools_menu.add_command(label="Start logcat", command=self.start_logcat)
+        tools_menu.add_command(label="Stop logcat", command=self.stop_logcat)
+        tools_menu.add_separator()
+        tools_menu.add_command(label="Record / stop recording (F9)", command=self.toggle_recording)
+        tools_menu.add_command(label="Run scenario + HTML report", command=self.run_with_report)
+        menubar.add_cascade(label="Tools", menu=tools_menu)
+        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(label="User Guide (Hướng dẫn)", command=self._open_guide_tab)
+        help_menu.add_command(label="About ADB Control Studio", command=self._show_about)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        self.config(menu=menubar)
+
+    def _bind_shortcuts(self):
+        self.bind_all("<F5>", lambda _e: self.refresh_devices())
+        self.bind_all("<F6>", lambda _e: self.refresh_mirror())
+        self.bind_all("<F9>", lambda _e: self.toggle_recording())
+
+    def _show_about(self):
+        messagebox.showinfo("About ADB Control Studio", ABOUT_TEXT)
+
+    def _open_guide_tab(self):
+        for i in range(self.tabs.index("end")):
+            if "Guide" in self.tabs.tab(i, "text"):
+                self.tabs.select(i)
+                return
+
     # ---------------------------------------------------------------- UI --
     def _build_ui(self):
-        left = ttk.Frame(self, width=380)
-        left.pack(side="left", fill="y", padx=6, pady=6)
-        right = ttk.Frame(self)
-        right.pack(side="right", fill="both", expand=True, padx=6, pady=6)
+        # status bar first so it always owns the bottom strip of the window
+        self.status = tk.StringVar(value="Ready. Connect a device (USB debugging ON) or start your emulator, then Refresh (F5).")
+        tk.Label(self, textvariable=self.status, bg=COLORS["status_bg"], fg=COLORS["status_fg"],
+                 font=FONT_SMALL, anchor="w", padx=10, pady=5).pack(side="bottom", fill="x")
 
-        ttk.Label(left, text="DEVICES", font=("", 10, "bold")).pack(anchor="w")
-        self.device_combo = ttk.Combobox(left, state="readonly", width=46)
-        self.device_combo.pack(fill="x", pady=2)
+        # ---- left: dark sidebar -------------------------------------------
+        left = ttk.Frame(self, width=384, style="Side.TFrame")
+        left.pack(side="left", fill="y")
+        left.pack_propagate(False)
+        inner = ttk.Frame(left, style="Side.TFrame")
+        inner.pack(fill="both", expand=True, padx=12, pady=10)
+
+        ttk.Label(inner, text="ADB CONTROL STUDIO", style="SideTitle.TLabel").pack(anchor="w")
+        ttk.Label(inner, text="Appium-style control - logcat - recorder - codegen - reports",
+                  style="SideMuted.TLabel", wraplength=350).pack(anchor="w", pady=(0, 10))
+
+        ttk.Label(inner, text="DEVICES", style="SideSection.TLabel").pack(anchor="w")
+        self.device_combo = ttk.Combobox(inner, state="readonly", width=44)
+        self.device_combo.pack(fill="x", pady=3)
         self.device_combo.bind("<<ComboboxSelected>>", lambda _e: self._select_device())
-        row = ttk.Frame(left); row.pack(fill="x", pady=2)
-        ttk.Button(row, text="Refresh", command=self.refresh_devices).pack(side="left", padx=2)
-        ttk.Button(row, text="Device info", command=self.show_device_info).pack(side="left", padx=2)
-        ttk.Button(row, text="Reconnect", command=lambda: self._bg(lambda: (self.adb.run(["reconnect"], check=False), self.refresh_devices()))).pack(side="left", padx=2)
+        row = ttk.Frame(inner, style="Side.TFrame"); row.pack(fill="x", pady=2)
+        ttk.Button(row, text="Refresh (F5)", style="Side.TButton", command=self.refresh_devices).pack(side="left", padx=2)
+        ttk.Button(row, text="Device info", style="Side.TButton", command=self.show_device_info).pack(side="left", padx=2)
+        ttk.Button(row, text="Reconnect", style="Side.TButton", command=lambda: self._bg(lambda: (self.adb.run(["reconnect"], check=False), self.refresh_devices()))).pack(side="left", padx=2)
 
-        wifi = ttk.LabelFrame(left, text="Wi-Fi connect (adb tcpip)")
-        wifi.pack(fill="x", pady=6)
-        self.wifi_entry = ttk.Entry(wifi, width=28)
+        wifi = ttk.LabelFrame(inner, text="Wi-Fi connect (adb tcpip)", style="Side.TLabelframe")
+        wifi.pack(fill="x", pady=8)
+        self.wifi_entry = ttk.Entry(wifi, width=26)
         self.wifi_entry.insert(0, "192.168.1.100:5555")
-        self.wifi_entry.pack(side="left", padx=4, pady=4)
-        ttk.Button(wifi, text="Connect", command=self.wifi_connect).pack(side="left", padx=2)
-        ttk.Button(wifi, text="Enable tcpip 5555", command=lambda: self._bg(lambda: self.adb.run(["tcpip", "5555"]))).pack(side="left", padx=2)
+        self.wifi_entry.pack(side="left", padx=4, pady=5)
+        ttk.Button(wifi, text="Connect", style="Side.TButton", command=self.wifi_connect).pack(side="left", padx=2)
+        ttk.Button(wifi, text="tcpip 5555", style="Side.TButton", command=lambda: self._bg(lambda: self.adb.run(["tcpip", "5555"]))).pack(side="left", padx=2)
 
-        ttk.Label(left, text="LIVE SCREEN  (click=tap - drag=swipe - right-click=long press)",
-                  font=("", 9, "bold")).pack(anchor="w", pady=(6, 2))
-        self.mirror = tk.Canvas(left, width=340, height=560, bg="#111827", highlightthickness=1)
+        ttk.Label(inner, text="LIVE SCREEN", style="SideSection.TLabel").pack(anchor="w", pady=(6, 0))
+        ttk.Label(inner, text="Click = tap - Drag = swipe - Right-click = long press",
+                  style="SideMuted.TLabel").pack(anchor="w", pady=(0, 4))
+        self.mirror = tk.Canvas(inner, width=344, height=540, bg="#020617",
+                                highlightthickness=2, highlightbackground="#334155", highlightcolor=COLORS["accent"])
         self.mirror.pack(fill="both", expand=True)
         self.mirror.bind("<ButtonPress-1>", self._mirror_press)
         self.mirror.bind("<ButtonRelease-1>", self._mirror_release)
         self.mirror.bind("<Button-3>", self._mirror_long_press)
-        mrow = ttk.Frame(left); mrow.pack(fill="x", pady=4)
-        ttk.Button(mrow, text="Screenshot", command=self.take_screenshot).pack(side="left", padx=2)
-        ttk.Button(mrow, text="Refresh screen", command=self.refresh_mirror).pack(side="left", padx=2)
+        mrow = ttk.Frame(inner, style="Side.TFrame"); mrow.pack(fill="x", pady=6)
+        ttk.Button(mrow, text="Screenshot", style="Side.TButton", command=self.take_screenshot).pack(side="left", padx=2)
+        ttk.Button(mrow, text="Refresh (F6)", style="Side.TButton", command=self.refresh_mirror).pack(side="left", padx=2)
         self.mirror_auto = tk.BooleanVar(value=True)
-        ttk.Checkbutton(mrow, text="Auto-refresh 2s", variable=self.mirror_auto).pack(side="left", padx=4)
+        ttk.Checkbutton(mrow, text="Auto 2s", style="Side.TCheckbutton", variable=self.mirror_auto).pack(side="left", padx=4)
+
+        # ---- right: header + tabs + status bar ------------------------------
+        right = ttk.Frame(self)
+        right.pack(side="right", fill="both", expand=True, padx=10, pady=(8, 0))
+        header = ttk.Frame(right); header.pack(fill="x", pady=(0, 6))
+        ttk.Label(header, text="Control Center", style="Title.TLabel").pack(side="left")
+        ttk.Label(header, text="  |  Drive the device on the left, automate & report on the right. "
+                               "New here? Menu Help > User Guide.",
+                  style="Sub.TLabel").pack(side="left", pady=(6, 0))
 
         self.tabs = ttk.Notebook(right)
         self.tabs.pack(fill="both", expand=True)
         self._tab_control(); self._tab_apps(); self._tab_inspector(); self._tab_logcat()
         self._tab_record(); self._tab_screenrecord(); self._tab_files(); self._tab_shell(); self._tab_report()
-        self.status = tk.StringVar(value="Ready. Connect a device (USB debugging ON) then Refresh.")
-        ttk.Label(right, textvariable=self.status, foreground="#2563eb").pack(anchor="w", pady=4)
+        self._tab_guide()
 
     # -- tabs ---------------------------------------------------------------
     def _tab_control(self):
@@ -193,7 +322,7 @@ class StudioApp(tk.Tk):
     def _tab_record(self):
         f = ttk.Frame(self.tabs); self.tabs.add(f, text="Record & Automation")
         top = ttk.Frame(f); top.pack(fill="x", padx=8, pady=6)
-        self.rec_btn = ttk.Button(top, text="● Start recording actions", command=self.toggle_recording)
+        self.rec_btn = ttk.Button(top, text="● Start recording actions", style="Accent.TButton", command=self.toggle_recording)
         self.rec_btn.pack(side="left", padx=2)
         ttk.Button(top, text="Replay scenario", command=self.replay_scenario).pack(side="left", padx=2)
         ttk.Button(top, text="Save scenario JSON...", command=self.save_scenario).pack(side="left", padx=2)
@@ -255,10 +384,31 @@ class StudioApp(tk.Tk):
         row = ttk.Frame(f); row.pack(anchor="w", padx=8, pady=2)
         self.stop_on_fail = tk.BooleanVar(value=False)
         ttk.Checkbutton(row, text="Stop on first failure", variable=self.stop_on_fail).pack(side="left", padx=4)
-        ttk.Button(row, text="Run scenario + build HTML report", command=self.run_with_report).pack(side="left", padx=4)
+        ttk.Button(row, text="Run scenario + build HTML report", style="Accent.TButton", command=self.run_with_report).pack(side="left", padx=4)
         ttk.Button(row, text="Open output/reports folder", command=lambda: os.startfile(os.path.join(OUTPUT_DIR, "reports")) if os.name == "nt" else None).pack(side="left", padx=4)
         self.report_text = tk.Text(f, wrap="word", font=("Consolas", 9))
         self.report_text.pack(fill="both", expand=True, padx=8, pady=6)
+
+    def _tab_guide(self):
+        f = ttk.Frame(self.tabs, style="Panel.TFrame"); self.tabs.add(f, text="Guide (Hướng dẫn)")
+        top = ttk.Frame(f, style="Panel.TFrame"); top.pack(fill="x", padx=10, pady=8)
+        ttk.Label(top, text="Hướng dẫn sử dụng - ADB Control Studio", style="Panel.TLabel",
+                  font=("Segoe UI", 13, "bold")).pack(side="left")
+        ttk.Button(top, text="About", command=self._show_about).pack(side="right", padx=2)
+        wrap = ttk.Frame(f, style="Panel.TFrame"); wrap.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        txt = tk.Text(wrap, wrap="word", font=("Segoe UI", 10), bg="#ffffff", fg=COLORS["text"],
+                      relief="flat", padx=14, pady=10)
+        scroll = ttk.Scrollbar(wrap, orient="vertical", command=txt.yview)
+        txt.configure(yscrollcommand=scroll.set)
+        scroll.pack(side="right", fill="y")
+        txt.pack(side="left", fill="both", expand=True)
+        txt.tag_config("h", font=("Segoe UI", 12, "bold"), foreground=COLORS["accent"], spacing1=14, spacing3=4)
+        txt.tag_config("body", font=("Segoe UI", 10), spacing3=8, lmargin1=4, lmargin2=4)
+        for title, body in GUIDE_SECTIONS:
+            txt.insert("end", title + "\n", "h")
+            txt.insert("end", body.strip() + "\n", "body")
+        txt.configure(state="disabled")
+        self.guide_text = txt
 
     # ------------------------------------------------------------- helpers --
     def _set_status(self, msg: str):
@@ -530,7 +680,8 @@ class StudioApp(tk.Tk):
     # -------------------------------------------------------------- record --
     def toggle_recording(self):
         self.recording = not self.recording
-        self.rec_btn.config(text="■ Stop recording" if self.recording else "● Start recording actions")
+        self.rec_btn.config(text="■ Stop recording" if self.recording else "● Start recording actions",
+                            style="Danger.TButton" if self.recording else "Accent.TButton")
         self._set_status("Recording ON - every tap/swipe/key/text/app action becomes a step." if self.recording else "Recording OFF")
 
     def _refresh_steps(self):

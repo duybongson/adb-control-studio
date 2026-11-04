@@ -31,6 +31,15 @@ report — all from one window.
 - A device/emulator with **USB debugging** enabled
 - Optional: `pip install Pillow` for smoother mirror scaling
 
+## Interface (v1.1)
+
+- Dark device sidebar (device picker, Wi-Fi connect, live mirror) + light control center.
+- Menu bar (File / Tools / Help), keyboard shortcuts: **F5** refresh devices, **F6** refresh
+  screen, **F9** start/stop recording.
+- Accent primary actions; the Record button turns red while recording.
+- Built-in **Guide tab** with the full user guide in Vietnamese (also in
+  [docs/GUIDE.md](docs/GUIDE.md), or menu **Help > User Guide**).
+
 ## Quick start (Windows)
 
 ```bat
